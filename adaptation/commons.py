@@ -43,7 +43,10 @@ def encoding_workflow(id, url, folder_out, bitrates_size_dict):
 @shared_task
 # def download_file(url, id):
 def download_file(*args, **kwargs):
-    print args, kwargs
+	'''
+	download a file to a temporary folder
+	'''
+    #print args, kwargs
     context = args[0]
 
     print("downloading %s", context.url)
@@ -61,10 +64,8 @@ def download_file(*args, **kwargs):
 def get_video_size(*args, **kwargs):
     '''
     use mediainfo to compute the video size
-    :param input_file: the video vile
-    :return: a tuple with height and width of the video
     '''
-    print args, kwargs
+    #print args, kwargs
     original_height = 0
     original_width = 0
     context = args[0]
@@ -83,16 +84,12 @@ def get_video_size(*args, **kwargs):
 # def compute_target_size(original_height, original_width, target_height):
 def compute_target_size(*args, **kwargs):
     '''
-
-    :param original_height: the height of the video
-    :param original_width: the width of the video
-    :param target_height: the height we want to video to have after transcoding
-    :return:  a tuple with the target height and width of the video
+    compute the new size for the video
     '''
     context = args[0]
     context.target_height = kwargs['target_height']
 
-    print args, kwargs
+    #print args, kwargs
     context.target_width = math.trunc(
         float(context.target_height) / context.track_height * context.track_width / 2) * 2
     return context
@@ -103,14 +100,9 @@ def compute_target_size(*args, **kwargs):
 # def transcode(file_in, folder_out, dimensions, bitrate):
 def transcode(*args, **kwargs):
     '''
-
-    :param file_in: the file to transcode
-    :param folder_out: the target folder where the transcoded file will be, it will be created
-    :param dimensions: tuple representing the target dimensions
-    :param bitrate: target bitrate
-    :return: the path of the created file
+    transcode the video to mp4 format
     '''
-    print args, kwargs
+    #print args, kwargs
     context = args[0]
     context.bitrate = kwargs['bitrate']
     dimsp = str(context.target_width) + ":" + str(context.target_height)
@@ -127,18 +119,11 @@ def transcode(*args, **kwargs):
 # def chunk_hls(file_in, folder_out, dimensions, segtime=4):
 def chunk_hls(*args, **kwargs):
     '''
-    create hls chunks and the playlist, add the playlist
-    :param file_in: the file that needs to be chunked
-    :param folder_out: the folder in which you store all hls sub-folders
-    :param dimensions: a tuple containing the dimension of the video, used for naming the created folder
-    :param bitrate: the bitrate of the target file
-    :param segtime: duration for segmentation in second
-    :return: the created playlist file path and the bitrate
+    create hls chunks and the version specific playlist
     '''
-    print args, kwargs
+    #print args, kwargs
     context = args[0]
-
-    context.segtime = kwargs['segtime']
+	context.segtime = kwargs['segtime']
 
     if not os.path.exists(context.get_hls_transcoded_folder()):
         os.makedirs(context.get_hls_transcoded_folder())
@@ -154,7 +139,10 @@ def chunk_hls(*args, **kwargs):
 @shared_task
 # def chunk_dash(files_in, folder_out):
 def chunk_dash(*args, **kwargs):
-    print args, kwargs
+	'''
+	create dash chunks for every video in the transcoded folder
+	'''
+    #print args, kwargs
     context = args[0]
     if not os.path.exists(context.get_dash_folder()):
         os.makedirs(context.get_dash_folder())
@@ -173,7 +161,10 @@ def chunk_dash(*args, **kwargs):
 @shared_task
 # def add_playlist_info(main_playlist_folder, version_playlist_file, bitrate):
 def add_playlist_info(*args, **kwargs):
-    print args, kwargs
+	'''
+	add this hls palylist info into the global hls playlist
+	'''
+    #print args, kwargs
     context = args[0]
     with open(context.get_hls_global_playlist(), "a") as f:
         f.write("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=" + str(
@@ -185,7 +176,10 @@ def add_playlist_info(*args, **kwargs):
 @shared_task
 # def add_playlist_header(playlist_folder):
 def add_playlist_header(*args, **kwargs):
-    print args, kwargs
+	'''
+	add the header to the global playlist, possibly remove existing hls folder and recreate it
+	'''
+    #print args, kwargs
     context = args[0]
     context.folder_out = kwargs["folder_out"]
     if os.path.exists(context.get_hls_folder()):
@@ -201,8 +195,11 @@ def add_playlist_header(*args, **kwargs):
 @shared_task
 # def add_playlist_footer(playlist_folder):
 def add_playlist_footer(*args, **kwargs):
-    print args
-    context = args[0][0]  # take the first context on the list...
+	'''
+	add global hls playlist folder
+	'''
+    #print args, kwargs
+    context = args[0][0]  # take the first context on the list, since we receive more than one
     with open(context.get_hls_global_playlist(), "a") as f:
         f.write("##EXT-X-ENDLIST")
     return context
