@@ -47,7 +47,7 @@ def ddo(url):
 
 
 @app.task(bind=True)
-    def encode_workflow(self, url):
+def encode_workflow(self, url):
     main_task_id = self.request.id
     print "(------------"
     print main_task_id
