@@ -189,9 +189,10 @@ def add_playlist_info(*args, **kwargs):
     '''
     # print args, kwargs
     context = args[0]
+    dimsp = str(context["target_width"]) + "x" + str(context["target_height"])
     with open(get_hls_global_playlist(context), "a") as f:
         f.write("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=" + str(
-            context["bitrate"] * 1000) + ",RESOLUTION=" + get_hls_transcoded_playlist(context) + "\n")
+            context["bitrate"] * 1000) + ",RESOLUTION=" + dimsp + "\n" + "/".join(get_hls_transcoded_playlist(context).split("/")[-2:]) + "\n")
     return context
 
 
