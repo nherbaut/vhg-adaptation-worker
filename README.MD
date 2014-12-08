@@ -10,8 +10,8 @@ The context diict is the only arg that is passed from task task. It has various 
 
 ### Celery on Debian ###
 
-sudo apt-get install python-pip mediainfo ffmpeg gpac
-sudo pip install celery pymediainfo
+sudo apt-get install python-pip mediainfo ffmpeg gpac python-dev aptlibxml2-dev libxslt1-dev python-dev
+sudo pip install celery pymediainfo lxml
 
 ### Celery As a Daemon ###
 
