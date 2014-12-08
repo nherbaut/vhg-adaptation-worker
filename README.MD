@@ -6,6 +6,31 @@ The project is composed from various celery tasks in the adaptation python packa
 
 The context diict is the only arg that is passed from task task. It has various helper functions that help computing eg. resources path.
 
+## installation ##
+
+### Celery on Debian ###
+
+sudo apt-get install python-pip mediainfo ffmpeg gpac
+sudo pip install celery pymediainfo
+
+### Celery As a Daemon ###
+
+follow instructions given at http://celery.readthedocs.org/en/latest/tutorials/daemonizing.html#generic-init-scripts
+
+### Configuration ###
+
+configuration options are in the settings.py file. You can configure the broker url and default output dir
+
+```python
+    BROKER_URL = 'amqp://guest:guest@172.16.1.1' #connection to the message broker
+    CELERY_RESULT_BACKEND = 'amqp://guest:guest@172.16.1.1' #that's to connect to result backend
+    config = {"folder_out": "/home/nicolas/output", #where the files should be writt en
+        "bitrates_size_dict": {100: 100, 200:200}} # what king of transcoding should be done
+```
+
+if your worker is called worker 1, logs are located in 
+
+    /var/log/celery/worker1.log
 
 ## A Task Scenario ##
 
