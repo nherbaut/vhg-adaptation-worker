@@ -129,6 +129,9 @@ def transcode(*args, **kwargs):
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
+    print         "@@@@@@@@@@@@@@@@@@@ ffmpeg -i " + context[
+            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(context)
+
     subprocess.call(
         "ffmpeg -i " + context[
             "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(
