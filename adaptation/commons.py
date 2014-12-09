@@ -51,10 +51,9 @@ def encode_workflow(self, url):
     main_task_id = self.request.id
     print "(------------"
     print main_task_id
-    random_uuid = uuid.uuid4().hex
     return (
         download_file.s(
-            context={"url": url, "folder_out": os.path.join(config["folder_out"], random_uuid), "id": random_uuid}) |
+            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id}) |
         get_video_size.s() |
         add_playlist_header.s() |
         chord(
