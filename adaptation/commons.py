@@ -5,11 +5,24 @@ import os
 import tempfile
 import urllib
 import shutil
-import uuid
+
+import pika
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # config import
-from settings import config
+from settings import *
 
 # celery import
 from celery import Celery, chord
@@ -27,18 +40,36 @@ app = Celery('tasks')
 # inject settings into celery
 app.config_from_object('adaptation.settings')
 
+connection = pika.BlockingConnection(pika.ConnectionParameters(
+    config["broker_host"]))
+channel_pika = connection.channel()
+channel_pika.queue_declare(queue='transcode-result')
+
 
 @app.task(bind=True)
 def notify(*args, **kwargs):
-    self = args[0]
     context = args[1]
-
     main_task_id = kwargs["main_task_id"]
+
+    if "complete" in kwargs and kwargs["complete"]:
+        channel_pika.basic_publish(exchange='',
+                                   routing_key='transcode-result',
+                                   body=main_task_id + "=" + "COMPLETE")
+    else:
+        channel_pika.basic_publish(exchange='',
+                                   routing_key='transcode-result',
+                                   body=main_task_id + "=" + "PARTIAL")
+
+    return context
+
+
+'''
+
     if "complete" in kwargs and kwargs["complete"]:
         self.update_state(main_task_id, state="COMPLETE")
     else:
         self.update_state(main_task_id, state="PARTIAL", meta={"hls": get_hls_transcoded_playlist(context)})
-    return context
+'''
 
 
 @app.task()
@@ -54,11 +85,13 @@ def encode_workflow(self, url):
     return (
         download_file.s(
             context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id}) |
+        notify.s(main_task_id=main_task_id, message="file downloaded") |
         get_video_size.s() |
         add_playlist_header.s() |
         chord(
             [(compute_target_size.s(target_height=target_height) |
-              transcode.s(bitrate=bitrate) |
+              notify.s(main_task_id=main_task_id, message="transcoding at " + str(bitrate)) |
+              transcode.s(bitrate=bitrate, name=name) |
               chunk_hls.s(segtime=4) |
               add_playlist_info.s() | notify.s(main_task_id=main_task_id))
              for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
@@ -130,7 +163,8 @@ def transcode(*args, **kwargs):
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
     print         "@@@@@@@@@@@@@@@@@@@ ffmpeg -i " + context[
-            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(context)
+        "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(
+        context)
 
     subprocess.call(
         "ffmpeg -i " + context[
