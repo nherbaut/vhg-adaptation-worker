@@ -17,6 +17,9 @@ from celery import Celery, chord
 # media info wrapper import
 from pymediainfo import MediaInfo
 
+# lxml import to edit dash playlist
+from lxml import etree as LXML
+
 # context helpers
 from context import get_transcoded_folder, get_transcoded_file, get_hls_transcoded_playlist, get_hls_transcoded_folder, \
     get_dash_folder, get_hls_folder, get_hls_global_playlist, get_dash_mpd_file_path
@@ -65,7 +68,7 @@ def encode_workflow(self, url):
              for target_height, bitrate in config["bitrates_size_dict"].items()],
 
             (add_playlist_footer.s() |
-             chunk_dash.s() | notify.s(complete=True, main_task_id=main_task_id))
+             chunk_dash.s() | edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))
         )
     )()
 
@@ -175,12 +178,50 @@ def chunk_dash(*args, **kwargs):
     for i in range(0, len(files_in)):
         args += files_in[i] + "#video:id=v" + str(i) + " "
 
+    args += files_in[0] + "#audio:id=a0 "
     args += " -out " + get_dash_mpd_file_path(context)
     print args
     subprocess.call(args, shell=True)
     return context
 
+@app.task
+def edit_dash_playlist(*args, **kwards):
+    '''
+    create dash chunks for every video in the transcoded folder
+    '''
+    # print args, kwargs
+    context = args[0]
 
+    tree = LXML.parse(get_dash_mpd_file_path(context))
+    root = tree.getroot()
+    # Namespace map
+    nsmap = root.nsmap.get(None)
+
+    #Function to find all the BaseURL
+    find_baseurl = LXML.ETXPath(      # lxml only !
+    "//{%s}BaseURL" % nsmap)
+    results = find_baseurl(root)
+    audio_file = results[-1].text
+    results[-1].text = "audio/" + results[-1].text
+    print results[-1].text # Warning : This is quite dirty ! We suppose the last element is the only audio element
+    tree.write(get_dash_mpd_file_path(context))
+
+    #Move audio files into audio directory
+    os.makedirs(os.path.join(get_dash_folder(context), "audio"))
+    shutil.move(os.path.join(get_dash_folder(context), audio_file), os.path.join(get_dash_folder(context), "audio", audio_file))
+
+    #Create .htaccess for apache
+    f = open(os.path.join(get_dash_folder(context), "audio", ".htaccess"),"w") #opens file with name of "test.txt"
+    f.write("AddType audio/mp4 .mp4 \n")
+    f.close()
+    return context
+
+
+
+
+
+
+    return context
 @app.task
 # def add_playlist_info(main_playlist_folder, version_playlist_file, bitrate):
 def add_playlist_info(*args, **kwargs):
