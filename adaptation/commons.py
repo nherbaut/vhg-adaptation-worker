@@ -61,7 +61,7 @@ def encode_workflow(self, url):
               transcode.s(bitrate=bitrate) |
               chunk_hls.s(segtime=4) |
               add_playlist_info.s() | notify.s(main_task_id=main_task_id))
-             for target_height, bitrate in config["bitrates_size_dict"].items()],
+             for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
 
             (add_playlist_footer.s() |
              chunk_dash.s() | notify.s(complete=True, main_task_id=main_task_id))
@@ -125,6 +125,7 @@ def transcode(*args, **kwargs):
     # print args, kwargs
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
+    context["name"] = kwargs['name']
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))

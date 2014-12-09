@@ -4,7 +4,7 @@ import os
 
 
 def get_transcoded_file(context):
-    return os.path.join(get_transcoded_folder(context), get_dim_as_str(context) + ".mp4")
+    return os.path.join(get_transcoded_folder(context), context["name"] + ".mp4")
 
 
 def get_transcoded_folder(context):
