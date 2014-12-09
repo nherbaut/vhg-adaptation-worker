@@ -62,13 +62,14 @@ def encode_workflow(self, url):
         add_playlist_header.s() |
         chord(
             [(compute_target_size.s(target_height=target_height) |
-              transcode.s(bitrate=bitrate) |
-              chunk_hls.s(segtime=4) |
+              transcode.s(bitrate=bitrate, segtime=4) |
+              chunk_hls.s() |
               add_playlist_info.s() | notify.s(main_task_id=main_task_id))
              for target_height, bitrate in config["bitrates_size_dict"].items()],
 
             (add_playlist_footer.s() |
-             chunk_dash.s() | edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))
+             chunk_dash.s(segtime=4) | #Warning : segtime is already set in transcode.s(), but not in the same context
+             edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))
         )
     )()
 
@@ -129,12 +130,14 @@ def transcode(*args, **kwargs):
     # print args, kwargs
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
+    context["segtime"] = kwargs['segtime']
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
     subprocess.call(
         "ffmpeg -i " + context[
-            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(
+            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context["bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
+        context["segtime"]) + "\) " + get_transcoded_file(
             context),
         shell=True)
     return context
@@ -148,7 +151,6 @@ def chunk_hls(*args, **kwargs):
     '''
     # print args, kwargs
     context = args[0]
-    context["segtime"] = kwargs['segtime']
 
     if not os.path.exists(get_hls_transcoded_folder(context)):
         os.makedirs(get_hls_transcoded_folder(context))
@@ -170,10 +172,11 @@ def chunk_dash(*args, **kwargs):
     '''
     # print args, kwargs
     context = args[0]
+    segtime = kwargs['segtime']
     if not os.path.exists(get_dash_folder(context)):
         os.makedirs(get_dash_folder(context))
 
-    args = "MP4Box -dash 4000 -profile onDemand "
+    args = "MP4Box -dash " + str(segtime) + "000 -profile onDemand "
     files_in = [os.path.join(get_transcoded_folder(context), f) for f in os.listdir(get_transcoded_folder(context))]
     for i in range(0, len(files_in)):
         args += files_in[i] + "#video:id=v" + str(i) + " "
@@ -198,12 +201,10 @@ def edit_dash_playlist(*args, **kwards):
     nsmap = root.nsmap.get(None)
 
     #Function to find all the BaseURL
-    find_baseurl = LXML.ETXPath(      # lxml only !
-    "//{%s}BaseURL" % nsmap)
+    find_baseurl = LXML.ETXPath("//{%s}BaseURL" % nsmap)
     results = find_baseurl(root)
     audio_file = results[-1].text
-    results[-1].text = "audio/" + results[-1].text
-    print results[-1].text # Warning : This is quite dirty ! We suppose the last element is the only audio element
+    results[-1].text = "audio/" + results[-1].text # Warning : This is quite dirty ! We suppose the last element is the only audio element
     tree.write(get_dash_mpd_file_path(context))
 
     #Move audio files into audio directory
@@ -211,17 +212,11 @@ def edit_dash_playlist(*args, **kwards):
     shutil.move(os.path.join(get_dash_folder(context), audio_file), os.path.join(get_dash_folder(context), "audio", audio_file))
 
     #Create .htaccess for apache
-    f = open(os.path.join(get_dash_folder(context), "audio", ".htaccess"),"w") #opens file with name of "test.txt"
+    f = open(os.path.join(get_dash_folder(context), "audio", ".htaccess"),"w")
     f.write("AddType audio/mp4 .mp4 \n")
     f.close()
     return context
 
-
-
-
-
-
-    return context
 @app.task
 # def add_playlist_info(main_playlist_folder, version_playlist_file, bitrate):
 def add_playlist_info(*args, **kwargs):
