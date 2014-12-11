@@ -11,16 +11,6 @@ import pika
 
 
 
-
-
-
-
-
-
-
-
-
-
 # config import
 from settings import *
 
@@ -43,7 +33,7 @@ app.config_from_object('adaptation.settings')
 connection = pika.BlockingConnection(pika.ConnectionParameters(
     config["broker_host"]))
 channel_pika = connection.channel()
-channel_pika.queue_declare(queue='transcode-result')
+channel_pika.queue_declare(queue='transcode-result',durable=True,exclusive=False,auto_delete=False)
 
 
 @app.task(bind=True)
