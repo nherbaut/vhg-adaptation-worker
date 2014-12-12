@@ -5,11 +5,15 @@ import os
 import tempfile
 import urllib
 import shutil
+import json
 
 import pika
-
-
 from celery.utils.log import get_task_logger
+
+
+
+
+
 
 
 
@@ -35,7 +39,7 @@ from context import get_transcoded_folder, get_transcoded_file, get_hls_transcod
 # main app for celery, configuration is in separate settings.ini file
 app = Celery('tasks')
 
-#logger FROM CELERY, not native python
+# logger FROM CELERY, not native python
 logger = get_task_logger(__name__)
 
 # inject settings into celery
@@ -52,15 +56,10 @@ def notify(*args, **kwargs):
     self = args[0]
     context = args[1]
     main_task_id = kwargs["main_task_id"]
-
-    if "complete" in kwargs and kwargs["complete"]:
-        channel_pika.basic_publish(exchange='',
-                                   routing_key='transcode-result',
-                                   body=main_task_id + "=" + "COMPLETE")
-    else:
-        channel_pika.basic_publish(exchange='',
-                                   routing_key='transcode-result',
-                                   body=main_task_id + "=" + "PARTIAL")
+    logger.debug("sending %s to result queue" % json.dumps(kwargs))
+    channel_pika.basic_publish(exchange='',
+                               routing_key='transcode-result',
+                               body=json.dumps(kwargs))
 
     return context
 
@@ -82,9 +81,11 @@ def encode_workflow(self, url):
         add_playlist_header.s() |
         chord(
             [(compute_target_size.s(target_height=target_height) |
-              transcode.s(bitrate=bitrate, segtime=4,name=name) |
+              transcode.s(bitrate=bitrate, segtime=4, name=name) |
+              notify.s(main_task_id=main_task_id, quality=name) |
               chunk_hls.s(segtime=4) |
-              add_playlist_info.s() | notify.s(main_task_id=main_task_id))
+              add_playlist_info.s()
+             )
              for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
 
             (add_playlist_footer.s() |
