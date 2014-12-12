@@ -8,6 +8,29 @@ The context diict is the only arg that is passed from task task. It has various 
 
 ## installation ##
 
+### ffmpeg & GPAC ###
+
+download and build from source, but before, install necessary pacakges
+
+    sudo apt-get -y install autoconf automake build-essential libgpac-dev libsdl1.2-dev libtheora-dev libtool libva-dev libvdpau-dev libvorbis-dev libx11-dev libxext-dev libxfixes-dev pkg-config texi2html zlib1g-dev yasm libx264-dev libfdk-aac-dev libmp3lame-dev libopus-dev libvpx-dev
+    mkdir build
+    cd build
+    wget http://ffmpeg.org/releases/ffmpeg-2.5.tar.bz2
+    tar -xvf ./ffmpeg-2.5.tar.bz2 
+    cd ffmpeg-2.5/
+    ./configure   --prefix="$HOME/ffmpeg_build"   --extra-cflags="-I$HOME/ffmpeg_build/include"   --extra-ldflags="-L$HOME/ffmpeg_build/lib"   --bindir="$HOME/bin"   --enable-gpl       --enable-libtheora   --enable-libvorbis    --enable-libx264   --enable-nonfree   --enable-x11grab
+    make
+    sudo make install
+    cd ..
+    wget https://github.com/gpac/gpac/archive/master.zip -O gpack.zip
+    unzip gpack.zip 
+    cd gpac-master/
+    ./configure 
+    make
+    sudo make install
+
+
+
 ### Celery on Debian ###
 
 sudo apt-get install python-pip mediainfo ffmpeg gpac python-dev aptlibxml2-dev libxslt1-dev python-dev
@@ -88,4 +111,8 @@ here's a description on how the encoding workflow tasks work. Some long stating 
 
 ## Notifications ##
 
-A notification task, which is passed the highest level task_id, is called when required and update the status, which triggers a json message sent to the result backend. A consumer should listen to the queue named after the task_id given at creation time
+Notification task send a json message on the broker with info about the current status of the transcoding. Message is sent to the *tanscode-result* queue.
+
+```json
+    {"quality":"medium","main_task_id":"uuid...","complete":False}
+```
