@@ -9,6 +9,11 @@ import shutil
 import pika
 
 
+from celery.utils.log import get_task_logger
+
+
+
+
 
 
 # config import
@@ -20,6 +25,9 @@ from celery import Celery, chord
 # media info wrapper import
 from pymediainfo import MediaInfo
 
+# lxml import to edit dash playlist
+from lxml import etree as LXML
+
 # context helpers
 from context import get_transcoded_folder, get_transcoded_file, get_hls_transcoded_playlist, get_hls_transcoded_folder, \
     get_dash_folder, get_hls_folder, get_hls_global_playlist, get_dash_mpd_file_path
@@ -27,17 +35,21 @@ from context import get_transcoded_folder, get_transcoded_file, get_hls_transcod
 # main app for celery, configuration is in separate settings.ini file
 app = Celery('tasks')
 
+#logger FROM CELERY, not native python
+logger = get_task_logger(__name__)
+
 # inject settings into celery
 app.config_from_object('adaptation.settings')
 
 connection = pika.BlockingConnection(pika.ConnectionParameters(
     config["broker_host"]))
 channel_pika = connection.channel()
-channel_pika.queue_declare(queue='transcode-result',durable=True,exclusive=False,auto_delete=False)
+channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
 
 
 @app.task(bind=True)
 def notify(*args, **kwargs):
+    self = args[0]
     context = args[1]
     main_task_id = kwargs["main_task_id"]
 
@@ -53,15 +65,6 @@ def notify(*args, **kwargs):
     return context
 
 
-'''
-
-    if "complete" in kwargs and kwargs["complete"]:
-        self.update_state(main_task_id, state="COMPLETE")
-    else:
-        self.update_state(main_task_id, state="PARTIAL", meta={"hls": get_hls_transcoded_playlist(context)})
-'''
-
-
 @app.task()
 def ddo(url):
     encode_workflow.delay(url)
@@ -70,30 +73,26 @@ def ddo(url):
 @app.task(bind=True)
 def encode_workflow(self, url):
     main_task_id = self.request.id
-    print "(------------"
+
     print main_task_id
-    return (
+    (
         download_file.s(
             context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id}) |
-        notify.s(main_task_id=main_task_id, message="file downloaded") |
         get_video_size.s() |
         add_playlist_header.s() |
         chord(
             [(compute_target_size.s(target_height=target_height) |
-              notify.s(main_task_id=main_task_id, message="transcoding at " + str(bitrate)) |
-              transcode.s(bitrate=bitrate, name=name) |
+              transcode.s(bitrate=bitrate, segtime=4,name=name) |
               chunk_hls.s(segtime=4) |
               add_playlist_info.s() | notify.s(main_task_id=main_task_id))
              for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
 
             (add_playlist_footer.s() |
-             chunk_dash.s() | notify.s(complete=True, main_task_id=main_task_id))
-        )
-    )()
+             chunk_dash.s(segtime=4) |  # Warning : segtime is already set in transcode.s(), but not in the same context
+             edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))))()
 
 
 @app.task()
-# def download_file(url, id):
 def download_file(*args, **kwargs):
     print args, kwargs
     context = kwargs["context"]
@@ -148,17 +147,16 @@ def transcode(*args, **kwargs):
     # print args, kwargs
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
+    context["segtime"] = kwargs['segtime']
     context["name"] = kwargs['name']
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
-    print         "@@@@@@@@@@@@@@@@@@@ ffmpeg -i " + context[
-        "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(
-        context)
-
     subprocess.call(
         "ffmpeg -i " + context[
-            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v 100k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*4\) " + get_transcoded_file(
+            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
+            "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
+            context["segtime"]) + "\) " + get_transcoded_file(
             context),
         shell=True)
     return context
@@ -192,19 +190,56 @@ def chunk_dash(*args, **kwargs):
     '''
     create dash chunks for every video in the transcoded folder
     '''
-    # print args, kwargs
+    logger.info("chunking dash")
+    logger.info(args)
+    logger.info(kwargs)
     context = args[0]
+    segtime = kwargs['segtime']
     if not os.path.exists(get_dash_folder(context)):
         os.makedirs(get_dash_folder(context))
 
-    args = "MP4Box -dash 4000 -profile onDemand "
+    args = "MP4Box -dash " + str(segtime) + "000 -profile onDemand "
     files_in = [os.path.join(get_transcoded_folder(context), f) for f in os.listdir(get_transcoded_folder(context))]
     for i in range(0, len(files_in)):
         args += files_in[i] + "#video:id=v" + str(i) + " "
 
+    args += files_in[0] + "#audio:id=a0 "
     args += " -out " + get_dash_mpd_file_path(context)
     print args
     subprocess.call(args, shell=True)
+    return context
+
+
+@app.task
+def edit_dash_playlist(*args, **kwards):
+    '''
+    create dash chunks for every video in the transcoded folder
+    '''
+    # print args, kwargs
+    context = args[0]
+
+    tree = LXML.parse(get_dash_mpd_file_path(context))
+    root = tree.getroot()
+    # Namespace map
+    nsmap = root.nsmap.get(None)
+
+    # Function to find all the BaseURL
+    find_baseurl = LXML.ETXPath("//{%s}BaseURL" % nsmap)
+    results = find_baseurl(root)
+    audio_file = results[-1].text
+    results[-1].text = "audio/" + results[
+        -1].text  # Warning : This is quite dirty ! We suppose the last element is the only audio element
+    tree.write(get_dash_mpd_file_path(context))
+
+    # Move audio files into audio directory
+    os.makedirs(os.path.join(get_dash_folder(context), "audio"))
+    shutil.move(os.path.join(get_dash_folder(context), audio_file),
+                os.path.join(get_dash_folder(context), "audio", audio_file))
+
+    # Create .htaccess for apache
+    f = open(os.path.join(get_dash_folder(context), "audio", ".htaccess"), "w")
+    f.write("AddType audio/mp4 .mp4 \n")
+    f.close()
     return context
 
 
@@ -216,9 +251,11 @@ def add_playlist_info(*args, **kwargs):
     '''
     # print args, kwargs
     context = args[0]
+    dimsp = str(context["target_width"]) + "x" + str(context["target_height"])
     with open(get_hls_global_playlist(context), "a") as f:
         f.write("#EXT-X-STREAM-INF:PROGRAM-ID=1,BANDWIDTH=" + str(
-            context["bitrate"] * 1000) + ",RESOLUTION=" + get_hls_transcoded_playlist(context) + "\n")
+            context["bitrate"] * 1000) + ",RESOLUTION=" + dimsp + "\n" + "/".join(
+            get_hls_transcoded_playlist(context).split("/")[-2:]) + "\n")
     return context
 
 

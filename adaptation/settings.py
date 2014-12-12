@@ -1,5 +1,5 @@
-config = {"folder_out": "/var/www",
-          "bitrates_size_tuple_list": [(10, 10, "low"), (20, 20, "medium"), (30, 30, "high")],
+config = {"folder_out": "/var/www/html",
+          "bitrates_size_tuple_list": [(100, 100, "low"), (200, 200, "medium"), (500, 300, "high")],
           "broker_host": "frontal",
           "broker_user": "guest",
           "broker_pwd": "guest"}
