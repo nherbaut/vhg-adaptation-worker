@@ -151,14 +151,18 @@ def transcode(*args, **kwargs):
     context["name"] = kwargs['name']
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
-        os.makedirs(get_transcoded_folder(context))
+        try:
+            os.makedirs(get_transcoded_folder(context))
+        except OSError as e:
+            pass
+
     command_line="ffmpeg -i " + context[
             "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
             "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
             context["segtime"]) + "\) " + get_transcoded_file(
             context)
     print("transcoding commandline %s"%command_line)
-    subprocess.call(
+    subprocess.call(command_line,
         shell=True)
     return context
 
