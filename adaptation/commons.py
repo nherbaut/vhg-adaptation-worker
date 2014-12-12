@@ -76,7 +76,7 @@ def encode_workflow(self, url):
     print main_task_id
     (
         download_file.s(
-            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id}) |
+            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id, "folder_in": config["folder_in"]}) |
         get_video_size.s() |
         add_playlist_header.s() |
         chord(
@@ -97,8 +97,9 @@ def encode_workflow(self, url):
 def download_file(*args, **kwargs):
     print args, kwargs
     context = kwargs["context"]
+    folder_in = context["folder_in"]
     print("downloading %s", context["url"])
-    context["original_file"] = os.path.join(tempfile.mkdtemp(), context["id"])
+    context["original_file"] = os.path.join(folder_in, context["id"])
     print("downloading in %s", context["original_file"] )
     opener = urllib.URLopener()
     opener.retrieve(context["url"], context["original_file"])
@@ -133,7 +134,6 @@ def compute_target_size(*args, **kwargs):
     context = args[0]
     context["target_height"] = kwargs['target_height']
 
-    print args, kwargs
     context["target_width"] = math.trunc(
         float(context["target_height"]) / context["track_height"] * context["track_width"] / 2) * 2
     return context
@@ -145,7 +145,6 @@ def transcode(*args, **kwargs):
     '''
     transcode the video to mp4 format
     '''
-    # print args, kwargs
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
     context["segtime"] = kwargs['segtime']
@@ -153,12 +152,13 @@ def transcode(*args, **kwargs):
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
-    subprocess.call(
-        "ffmpeg -i " + context[
+    command_line="ffmpeg -i " + context[
             "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
             "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
             context["segtime"]) + "\) " + get_transcoded_file(
-            context),
+            context)
+    print("transcoding commandline %s"%command_line)
+    subprocess.call(
         shell=True)
     return context
 

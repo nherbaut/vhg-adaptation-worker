@@ -1,4 +1,5 @@
-config = {"folder_out": "/var/www/html",
+config = {"folder_out": "/var/www/",
+	"folder_in":"/var/www_in",
           "bitrates_size_tuple_list": [(100, 100, "low"), (200, 200, "medium"), (500, 300, "high")],
           "broker_host": "frontal",
           "broker_user": "guest",
