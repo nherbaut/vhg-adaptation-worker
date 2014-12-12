@@ -145,6 +145,7 @@ def transcode(*args, **kwargs):
     '''
     transcode the video to mp4 format
     '''
+    print "@@@@@@@@@@@ tanscode"
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
     context["segtime"] = kwargs['segtime']
@@ -161,7 +162,7 @@ def transcode(*args, **kwargs):
             "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
             context["segtime"]) + "\) " + get_transcoded_file(
             context)
-    print("transcoding commandline %s"%command_line)
+    print("@@@@@@@@@@@@@@@@@@@@@transcoding commandline %s"%command_line)
     subprocess.call(command_line,
         shell=True)
     return context
