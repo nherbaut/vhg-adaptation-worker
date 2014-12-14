@@ -30,6 +30,13 @@ app = Celery('tasks')
 # inject settings into celery
 app.config_from_object('adaptation.settings')
 
+def run_background(*args):
+    try: 
+        code = subprocess.check_call(*args, shell=True)
+    except subprocess.CalledProcessError:
+        print "Error"
+
+        
 
 @app.task(bind=True)
 def notify(*args, **kwargs):
@@ -134,12 +141,11 @@ def transcode(*args, **kwargs):
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         os.makedirs(get_transcoded_folder(context))
-    subprocess.call(
+    run_background(
         "ffmpeg -i " + context[
             "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context["bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
         context["segtime"]) + "\) " + get_transcoded_file(
-            context),
-        shell=True)
+            context))
     return context
 
 
@@ -160,7 +166,7 @@ def chunk_hls(*args, **kwargs):
         context["segtime"]) + " -segment_wrap 0 -segment_list " + get_hls_transcoded_playlist(
         context) + " " + get_hls_transcoded_folder(context) + "/chunks_name%03d.ts"
     print ffargs
-    subprocess.call(ffargs, shell=True)
+    run_background(ffargs)
     return context
 
 
@@ -184,7 +190,7 @@ def chunk_dash(*args, **kwargs):
     args += files_in[0] + "#audio:id=a0 "
     args += " -out " + get_dash_mpd_file_path(context)
     print args
-    subprocess.call(args, shell=True)
+    run_background(args)
     return context
 
 @app.task
