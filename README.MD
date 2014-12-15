@@ -1,11 +1,5 @@
 # encoding_workflow #
 
-The project is composed from various celery tasks in the adaptation python package. One should only call high level task encoding_workflow in the commons.py module.
-
-## Context ##
-
-The context diict is the only arg that is passed from task task. It has various helper functions that help computing eg. resources path.
-
 ## installation ##
 
 ### ffmpeg & GPAC ###
@@ -55,7 +49,15 @@ if your worker is called worker 1, logs are located in
 
     /var/log/celery/worker1.log
 
-## A Task Scenario ##
+## Running tasks ##
+
+The project is composed from various celery tasks in the adaptation python package. One should only call high level task encoding_workflow in the commons.py module.
+
+### Context ###
+
+The context diict is the only arg that is passed from task task. It has various helper functions that help computing eg. resources path.
+
+### A Task Scenario ###
 
 * A task is given the context by *args
 * Some named arguments that are retrieved by **kwargs. 
@@ -64,7 +66,7 @@ if your worker is called worker 1, logs are located in
 * Context should be returned by the task to be used by the next task.
 
 
-## Workflow ##
+### Workflow ###
 here's a description on how the encoding workflow tasks work. Some long stating task run un parallel on different workers thanks to a celery chord
 
     _________________   _______________   ____________________
@@ -109,7 +111,7 @@ here's a description on how the encoding workflow tasks work. Some long stating 
                                                         |__________________|
 
 
-## Notifications ##
+### Notifications ###
 
 Notification task send a json message on the broker with info about the current status of the transcoding. Message is sent to the *tanscode-result* queue.
 
