@@ -12,7 +12,7 @@ The context diict is the only arg that is passed from task task. It has various 
 
 download and build from source, but before, install necessary pacakges
 
-    sudo apt-get -y install autoconf automake build-essential libgpac-dev libsdl1.2-dev libtheora-dev libtool libva-dev libvdpau-dev libvorbis-dev libx11-dev libxext-dev libxfixes-dev pkg-config texi2html zlib1g-dev yasm libx264-dev libfdk-aac-dev libmp3lame-dev libopus-dev libvpx-dev
+    sudo apt-get -y install autoconf automake build-essential libgpac-dev libsdl1.2-dev libtheora-dev libtool libva-dev libvdpau-dev libvorbis-dev libx11-dev libxext-dev libxfixes-dev pkg-config texi2html zlib1g-dev yasm libx264-dev libmp3lame-dev libopus-dev libvpx-dev unzip
     mkdir build
     cd build
     wget http://ffmpeg.org/releases/ffmpeg-2.5.tar.bz2
