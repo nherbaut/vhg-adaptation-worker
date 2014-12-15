@@ -33,7 +33,7 @@ download and build from source, but before, install necessary pacakges
 
 ### Celery on Debian ###
 
-    sudo apt-get install python-pip mediainfo ffmpeg gpac python-dev aptlibxml2-dev libxslt1-dev python-dev
+    sudo apt-get install python-pip mediainfo python-dev aptlibxml2-dev libxslt1-dev python-dev
     sudo pip install celery pymediainfo lxml
 
 ### Celery As a Daemon ###
