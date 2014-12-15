@@ -12,7 +12,7 @@ download and build from source, but before, install necessary pacakges
     wget http://ffmpeg.org/releases/ffmpeg-2.5.tar.bz2
     tar -xvf ./ffmpeg-2.5.tar.bz2 
     cd ffmpeg-2.5/
-    ./configure   --prefix="$HOME/ffmpeg_build"   --extra-cflags="-I$HOME/ffmpeg_build/include"   --extra-ldflags="-L$HOME/ffmpeg_build/lib"   --bindir="$HOME/bin"   --enable-gpl       --enable-libtheora   --enable-libvorbis    --enable-libx264   --enable-nonfree   --enable-x11grab
+    ./configure     --enable-gpl       --enable-libtheora   --enable-libvorbis    --enable-libx264   --enable-nonfree   --enable-x11grab
     make
     sudo make install
     cd ..
@@ -27,8 +27,8 @@ download and build from source, but before, install necessary pacakges
 
 ### Celery on Debian ###
 
-    sudo apt-get install python-pip mediainfo python-dev aptlibxml2-dev libxslt1-dev python-dev
-    sudo pip install celery pymediainfo lxml
+    sudo apt-get install python-pip mediainfo python-dev libxslt1-dev python-dev
+    sudo pip install celery pymediainfo lxml pika
 
 ### Celery As a Daemon ###
 
