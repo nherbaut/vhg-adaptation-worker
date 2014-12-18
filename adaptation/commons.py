@@ -2,13 +2,16 @@ __author__ = 'nherbaut'
 import subprocess
 import math
 import os
-import tempfile
 import urllib
 import shutil
+
 import json
 
 import pika
 from celery.utils.log import get_task_logger
+
+
+
 
 
 
@@ -57,13 +60,23 @@ def notify(*args, **kwargs):
     context = args[1]
     main_task_id = kwargs["main_task_id"]
     logger.debug("sending %s to result queue" % json.dumps(kwargs))
-    channel_pika.basic_publish(exchange='',
-                               routing_key='transcode-result',
-                               body=json.dumps(kwargs))
+    try:
+        channel_pika.basic_publish(exchange='',
+                                   routing_key='transcode-result',
+                                   body=json.dumps(kwargs))
+    except:
+        logger.error("failed to connect to pika, trying again one more time")
+        connection = pika.BlockingConnection(pika.ConnectionParameters(config["broker_host"]))
+        channel_pika = connection.channel()
+        channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
+        channel_pika.basic_publish(exchange='',
+                                   routing_key='transcode-result',
+                                   body=json.dumps(kwargs))
 
     return context
 
 
+@app.task()
 def deploy_original_file(*args, **kwargs):
     context = args[0]
     encoding_folder = get_transcoded_folder(context)
@@ -100,8 +113,9 @@ def encode_workflow(self, url):
              for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
 
             (add_playlist_footer.s() |
-             chunk_dash.s(segtime=4) |  # Warning : segtime is already set in transcode.s(), but not in the same context
-             edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))))()
+             #chunk_dash.s(segtime=4) |  # Warning : segtime is already set in transcode.s(), but not in the same context
+             #edit_dash_playlist.s() |
+             notify.s(complete=True, main_task_id=main_task_id))))()
 
 
 @app.task(bind=True)
@@ -199,7 +213,7 @@ def transcode(*args, **kwargs):
         context)
     print("transcoding commandline %s" % command_line)
     subprocess.call(command_line,
-        shell=True)
+                    shell=True)
     return context
 
 
