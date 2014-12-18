@@ -2,17 +2,12 @@ __author__ = 'nherbaut'
 import subprocess
 import math
 import os
-import tempfile
 import urllib
 import shutil
 import json
 
 import pika
 from celery.utils.log import get_task_logger
-
-
-
-
 
 
 
@@ -64,6 +59,15 @@ def notify(*args, **kwargs):
     return context
 
 
+def deploy_original_file(*args, **kwargs):
+    context = args[0]
+    encoding_folder = get_transcoded_folder(context)
+    if not os.path.exists(encoding_folder):
+        os.makedirs(encoding_folder)
+    shutil.copyfile(context["original_file"], os.path.join(encoding_folder, "original.mp4"))
+    return context
+
+
 @app.task()
 def ddo(url):
     encode_workflow.delay(url)
@@ -73,10 +77,37 @@ def ddo(url):
 def encode_workflow(self, url):
     main_task_id = self.request.id
 
+    (
+        download_file.s(
+            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id,
+                     "folder_in": config["folder_in"]}) |
+        deploy_original_file.s() |
+        notify.s(main_task_id=main_task_id, quality='original') |
+        get_video_size.s() |
+        add_playlist_header.s() |
+        chord(
+            [(compute_target_size.s(target_height=target_height) |
+              transcode.s(bitrate=bitrate, segtime=4, name=name) |
+              notify.s(main_task_id=main_task_id, quality=name) |
+              chunk_hls.s(segtime=4) |
+              add_playlist_info.s()
+             )
+             for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
+
+            (add_playlist_footer.s() |
+             chunk_dash.s(segtime=4) |  # Warning : segtime is already set in transcode.s(), but not in the same context
+             edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))))()
+
+
+@app.task(bind=True)
+def encode_workflow_parallel(self, url):
+    main_task_id = self.request.id
+
     print main_task_id
     (
         download_file.s(
-            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id, "folder_in": config["folder_in"]}) |
+            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id,
+                     "folder_in": config["folder_in"]}) |
         get_video_size.s() |
         add_playlist_header.s() |
         chord(
@@ -156,14 +187,14 @@ def transcode(*args, **kwargs):
         except OSError as e:
             pass
 
-    command_line="ffmpeg -i " + context[
-            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
-            "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
-            context["segtime"]) + "\) " + get_transcoded_file(
-            context)
-    print("transcoding commandline %s"%command_line)
+    command_line = "ffmpeg -i " + context[
+        "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
+        "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
+        context["segtime"]) + "\) " + get_transcoded_file(
+        context)
+    print("transcoding commandline %s" % command_line)
     subprocess.call(command_line,
-        shell=True)
+                    shell=True)
     return context
 
 
