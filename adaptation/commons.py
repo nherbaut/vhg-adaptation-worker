@@ -2,12 +2,17 @@ __author__ = 'nherbaut'
 import subprocess
 import math
 import os
+import tempfile
 import urllib
 import shutil
 import json
 
 import pika
 from celery.utils.log import get_task_logger
+
+
+
+
 
 
 
@@ -194,7 +199,7 @@ def transcode(*args, **kwargs):
         context)
     print("transcoding commandline %s" % command_line)
     subprocess.call(command_line,
-                    shell=True)
+        shell=True)
     return context
 
 

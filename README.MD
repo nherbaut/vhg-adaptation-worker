@@ -1,24 +1,18 @@
 # encoding_workflow #
 
-The project is composed from various celery tasks in the adaptation python package. One should only call high level task encoding_workflow in the commons.py module.
-
-## Context ##
-
-The context diict is the only arg that is passed from task task. It has various helper functions that help computing eg. resources path.
-
 ## installation ##
 
 ### ffmpeg & GPAC ###
 
 download and build from source, but before, install necessary pacakges
 
-    sudo apt-get -y install autoconf automake build-essential libgpac-dev libsdl1.2-dev libtheora-dev libtool libva-dev libvdpau-dev libvorbis-dev libx11-dev libxext-dev libxfixes-dev pkg-config texi2html zlib1g-dev yasm libx264-dev libfdk-aac-dev libmp3lame-dev libopus-dev libvpx-dev
+    sudo apt-get -y install autoconf automake build-essential libgpac-dev libsdl1.2-dev libtheora-dev libtool libva-dev libvdpau-dev libvorbis-dev libx11-dev libxext-dev libxfixes-dev pkg-config texi2html zlib1g-dev yasm libx264-dev libmp3lame-dev libopus-dev libvpx-dev unzip
     mkdir build
     cd build
     wget http://ffmpeg.org/releases/ffmpeg-2.5.tar.bz2
     tar -xvf ./ffmpeg-2.5.tar.bz2 
     cd ffmpeg-2.5/
-    ./configure   --prefix="$HOME/ffmpeg_build"   --extra-cflags="-I$HOME/ffmpeg_build/include"   --extra-ldflags="-L$HOME/ffmpeg_build/lib"   --bindir="$HOME/bin"   --enable-gpl       --enable-libtheora   --enable-libvorbis    --enable-libx264   --enable-nonfree   --enable-x11grab
+    ./configure     --enable-gpl       --enable-libtheora   --enable-libvorbis    --enable-libx264   --enable-nonfree   --enable-x11grab
     make
     sudo make install
     cd ..
@@ -33,8 +27,8 @@ download and build from source, but before, install necessary pacakges
 
 ### Celery on Debian ###
 
-    sudo apt-get install python-pip mediainfo ffmpeg gpac python-dev aptlibxml2-dev libxslt1-dev python-dev
-    sudo pip install celery pymediainfo lxml
+    sudo apt-get install python-pip mediainfo python-dev libxslt1-dev python-dev
+    sudo pip install celery pymediainfo lxml pika
 
 ### Celery As a Daemon ###
 
@@ -55,7 +49,15 @@ if your worker is called worker 1, logs are located in
 
     /var/log/celery/worker1.log
 
-## A Task Scenario ##
+## Running tasks ##
+
+The project is composed from various celery tasks in the adaptation python package. One should only call high level task encoding_workflow in the commons.py module.
+
+### Context ###
+
+The context diict is the only arg that is passed from task task. It has various helper functions that help computing eg. resources path.
+
+### A Task Scenario ###
 
 * A task is given the context by *args
 * Some named arguments that are retrieved by **kwargs. 
@@ -64,7 +66,7 @@ if your worker is called worker 1, logs are located in
 * Context should be returned by the task to be used by the next task.
 
 
-## Workflow ##
+### Workflow ###
 here's a description on how the encoding workflow tasks work. Some long stating task run un parallel on different workers thanks to a celery chord
 
     _________________   _______________   ____________________
@@ -109,7 +111,7 @@ here's a description on how the encoding workflow tasks work. Some long stating 
                                                         |__________________|
 
 
-## Notifications ##
+### Notifications ###
 
 Notification task send a json message on the broker with info about the current status of the transcoding. Message is sent to the *tanscode-result* queue.
 
