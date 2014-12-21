@@ -69,6 +69,7 @@ def encode_workflow(self, src, dest):
     random_uuid = uuid.uuid4().hex
     context={"original_file": src, "folder_out": config["folder_out"] + dest, "id": random_uuid}
     context = get_video_size(context=context)
+    context = get_video_thumbnail(context)
     context = add_playlist_header(context)
     for target_height, bitrate in config["bitrates_size_dict"].items():
         contextLoop = compute_target_size(context, target_height=target_height)
@@ -81,6 +82,7 @@ def encode_workflow(self, src, dest):
     context = chunk_dash(context, segtime=4) #Warning : segtime is already set in transcode.s(), but not in the same context
     context = edit_dash_playlist(context)
     #notify.s(complete=True, main_task_id=main_task_id))
+    clean_encoding_folder(context)
 
 @app.task
 # def get_video_size(input_file):
@@ -99,6 +101,22 @@ def get_video_size(*args, **kwargs):
             return context
     raise AssertionError("failed to read video info from " + context["original_file"])
 
+@app.task
+# def get_video_thumbnail(input_file):
+def get_video_thumbnail(*args, **kwargs):
+    '''
+    create image from video
+    '''
+    # print args, kwargs
+    context = args[0]
+
+    if not os.path.exists(context['folder_out']):
+        os.makedirs(context['folder_out'])
+
+    ffargs = "ffmpeg -i " + context["original_file"] + " -vcodec mjpeg -vframes 1 -an -f rawvideo -s 426x240 -ss 20 "+ context["folder_out"] + "/folder.jpg"
+    print ffargs
+    run_background(ffargs)
+    return context
 
 @app.task
 # def compute_target_size(original_height, original_width, target_height):
@@ -253,3 +271,13 @@ def add_playlist_footer(*args, **kwargs):
     with open(get_hls_global_playlist(context), "a") as f:
         f.write("##EXT-X-ENDLIST")
     return context
+
+@app.task
+# def add_playlist_footer(playlist_folder):
+def clean_encoding_folder(*args, **kwargs):
+    '''
+    delete encoding folder
+    '''
+    # print args, kwargs
+    context = args[0]
+    shutil.rmtree(get_transcoded_folder(context))
