@@ -52,48 +52,35 @@ def notify(*args, **kwargs):
 
 
 @app.task()
-def ddo(url):
-    encode_workflow.delay(url)
+def ddo(src, dest):
+    try:
+        encode_workflow(src, dest)
+    except:
+        print "Error while encoding_workflow"
+        raise
+
 
 
 @app.task(bind=True)
-def encode_workflow(self, url):
+def encode_workflow(self, src, dest):
     main_task_id = self.request.id
     print "(------------"
     print main_task_id
     random_uuid = uuid.uuid4().hex
-    return (
-        download_file.s(
-            context={"url": url, "folder_out": os.path.join(config["folder_out"], random_uuid), "id": random_uuid}) |
-        get_video_size.s() |
-        add_playlist_header.s() |
-        chord(
-            [(compute_target_size.s(target_height=target_height) |
-              transcode.s(bitrate=bitrate, segtime=4) |
-              chunk_hls.s() |
-              add_playlist_info.s() | notify.s(main_task_id=main_task_id))
-             for target_height, bitrate in config["bitrates_size_dict"].items()],
+    context={"original_file": src, "folder_out": config["folder_out"] + dest, "id": random_uuid}
+    context = get_video_size(context=context)
+    context = add_playlist_header(context)
+    for target_height, bitrate in config["bitrates_size_dict"].items():
+        contextLoop = compute_target_size(context, target_height=target_height)
+        contextLoop = transcode(contextLoop, bitrate=bitrate, segtime=4)
+        contextLoop = chunk_hls(contextLoop)
+        contextLoop = add_playlist_info(contextLoop)
+        #notify.s(main_task_id=main_task_id))
 
-            (add_playlist_footer.s() |
-             chunk_dash.s(segtime=4) | #Warning : segtime is already set in transcode.s(), but not in the same context
-             edit_dash_playlist.s() | notify.s(complete=True, main_task_id=main_task_id))
-        )
-    )()
-
-
-@app.task()
-# def download_file(url, id):
-def download_file(*args, **kwargs):
-    print args, kwargs
-    context = kwargs["context"]
-    print("downloading %s", context["url"])
-    context["original_file"] = os.path.join(tempfile.mkdtemp(), context["id"])
-    print("downloading in %s", context["original_file"] )
-    opener = urllib.URLopener()
-    opener.retrieve(context["url"], context["original_file"])
-    print("downloaded in %s", context["original_file"] )
-    return context
-
+    context = add_playlist_footer(context)
+    context = chunk_dash(context, segtime=4) #Warning : segtime is already set in transcode.s(), but not in the same context
+    context = edit_dash_playlist(context)
+    #notify.s(complete=True, main_task_id=main_task_id))
 
 @app.task
 # def get_video_size(input_file):
@@ -102,7 +89,7 @@ def get_video_size(*args, **kwargs):
     use mediainfo to compute the video size
     '''
     print args, kwargs
-    context = args[0]
+    context = kwargs["context"]
     media_info = MediaInfo.parse(context["original_file"])
     for track in media_info.tracks:
         if track.track_type == 'Video':
@@ -262,7 +249,7 @@ def add_playlist_footer(*args, **kwargs):
     add global hls playlist folder
     '''
     # print args, kwargs
-    context = args[0][0]  # take the first context["on"] the list, since we receive more than one
+    context = args[0]  # take the first context["on"] the list, since we receive more than one
     with open(get_hls_global_playlist(context), "a") as f:
         f.write("##EXT-X-ENDLIST")
     return context
