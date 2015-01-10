@@ -1,11 +1,11 @@
 #!/bin/bash
 BUILD="$(pwd)/build"
 mkdir $BUILD
-PREFIX="/usr/local/ffmpeg"
-BINDIR="/usr/local/ffmpeg/bin"
+PREFIX="/usr/local/"
+BINDIR="/usr/local/bin"
 mkdir -p $PREFIX
 
-echo "export PATH=$PATH:/usr/local/ffmpeg/bin" >> .bashrc
+#echo "export PATH=$PATH:/usr/local/ffmpeg/bin" >> .bashrc
 
 apt-get update
 apt-get -y install autoconf automake build-essential libass-dev libfreetype6-dev libgpac-dev \
@@ -34,8 +34,8 @@ PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
   --enable-libvorbis \
   --enable-libvpx \
   --enable-libx264 \
-  --enable-nonfree \
-  --enable-x11grab
+  --enable-nonfree
+
 make
 make install
 make distclean
