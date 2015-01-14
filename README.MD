@@ -1,4 +1,14 @@
-# encoding_workflow #
+# Adaptation and Caching Worker #
+
+## Description ##
+
+One of the key feature of cloud computing is its ability to produce on-demand compute power at a small cost. To take advantage of this feature, we decided to implement the most computing intensive tasks as network of workers using a Python framework called Celery. Celery is an asynchronous task queue/job queue based on distributed message passing.
+Every Celery worker is a stand alone application being able to perform one or more tasks in an parallelized manner. To achieve this goal, a general transcoding work flow has been designed to be applied on a remote video file. 
+
+Subtasks 3.1, 3.2, can be run in parallel, leaving the possibility to deploy as many worker as desired to fulfill the needs of performance.
+We created a virtual machine template with the appropriate software configuration, letting the VNF Orchestrator dealing with underlaying network connections details. The network topology is flat, every streamer being directly connected to a message a Message Broker.
+Having a network of worker allows us to scale-up or scale-down the overall compute power simply by turning a virtual machine up or down. Once the worker is up, it connects to the message broker, and pick up the first task available on the queue. Frequent feedback messages are pushed to the message broker, allowing us to present the results on the gateway as soon as they are available on the storage. 
+If the compute capacity is above the required level, active workers are decommissioned, leaving the pool as their host virtual machine turns of.
 
 ## installation ##
 
@@ -81,12 +91,12 @@ here's a description on how the encoding workflow tasks work. Some long stating 
                                                 |    |____________________|      | | \
                                                 |              |                 | | |
                                                 |    __________|___________      | | |
-                                                |    |TRANSCODE            |     | | |
+                                                |    |TRANSCODE 3.1        |     | | |
                                                 |    |_____________________|     | | |
                                                 |              |                 | | |
                                                 |              |                 | | |
                                                 |     _________|____________     | | |
-                                                |     | CHUNK HLS          |     | | |
+                                                |     | CHUNK HLS 3.2      |     | | |
                                                 |     |____________________|     | | |
                                                 |              |                 | | |
                                                 |      ________|____________     | | |
