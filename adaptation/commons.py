@@ -113,7 +113,7 @@ def get_video_thumbnail(*args, **kwargs):
     if not os.path.exists(context['folder_out']):
         os.makedirs(context['folder_out'])
 
-    ffargs = "ffmpeg -i " + context["original_file"] + " -vcodec mjpeg -vframes 1 -an -f rawvideo -s 426x240 -ss 20 "+ context["folder_out"] + "/folder.jpg"
+    ffargs = "ffmpeg -i " + context["original_file"] + " -vcodec mjpeg -vframes 1 -an -f rawvideo -s 426x240 -ss 10 "+ context["folder_out"] + "/folder.jpg"
     print ffargs
     run_background(ffargs)
     return context
