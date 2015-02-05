@@ -2,6 +2,7 @@ __author__ = 'nherbaut'
 import subprocess
 import math
 import os
+import tempfile
 import urllib
 import shutil
 
@@ -53,6 +54,11 @@ connection = pika.BlockingConnection(pika.ConnectionParameters(
 channel_pika = connection.channel()
 channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
 
+def run_background(*args):
+    try: 
+        code = subprocess.check_call(*args, shell=True)
+    except subprocess.CalledProcessError:
+        print "Error"
 
 @app.task(bind=True)
 def notify(*args, **kwargs):
@@ -74,8 +80,6 @@ def notify(*args, **kwargs):
                                    body=json.dumps(kwargs))
 
     return context
-
-
 @app.task()
 def deploy_original_file(*args, **kwargs):
     context = args[0]
@@ -85,7 +89,6 @@ def deploy_original_file(*args, **kwargs):
     shutil.copyfile(context["original_file"], os.path.join(encoding_folder, "original.mp4"))
     return context
 
-
 @app.task()
 def ddo(url):
     encode_workflow.delay(url)
@@ -94,34 +97,7 @@ def ddo(url):
 @app.task(bind=True)
 def encode_workflow(self, url):
     main_task_id = self.request.id
-
-    (
-        download_file.s(
-            context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id,
-                     "folder_in": config["folder_in"]}) |
-        deploy_original_file.s() |
-        notify.s(main_task_id=main_task_id, quality='original') |
-        get_video_size.s() |
-        add_playlist_header.s() |
-        chord(
-            [(compute_target_size.s(target_height=target_height) |
-              transcode.s(bitrate=bitrate, segtime=4, name=name) |
-              notify.s(main_task_id=main_task_id, quality=name) |
-              chunk_hls.s(segtime=4) |
-              add_playlist_info.s()
-             )
-             for target_height, bitrate, name in config["bitrates_size_tuple_list"]],
-
-            (add_playlist_footer.s() |
-             #chunk_dash.s(segtime=4) |  # Warning : segtime is already set in transcode.s(), but not in the same context
-             #edit_dash_playlist.s() |
-             notify.s(complete=True, main_task_id=main_task_id))))()
-
-
-@app.task(bind=True)
-def encode_workflow_parallel(self, url):
-    main_task_id = self.request.id
-
+    print "(------------"
     print main_task_id
     (
         download_file.s(
@@ -174,6 +150,22 @@ def get_video_size(*args, **kwargs):
             return context
     raise AssertionError("failed to read video info from " + context["original_file"])
 
+@app.task
+# def get_video_thumbnail(input_file):
+def get_video_thumbnail(*args, **kwargs):
+    '''
+    create image from video
+    '''
+    # print args, kwargs
+    context = args[0]
+
+    if not os.path.exists(context['folder_out']):
+        os.makedirs(context['folder_out'])
+
+    ffargs = "ffmpeg -i " + context["original_file"] + " -vcodec mjpeg -vframes 1 -an -f rawvideo -s 426x240 -ss 10 "+ context["folder_out"] + "/folder.jpg"
+    print ffargs
+    run_background(ffargs)
+    return context
 
 @app.task
 # def compute_target_size(original_height, original_width, target_height):
@@ -184,6 +176,7 @@ def compute_target_size(*args, **kwargs):
     context = args[0]
     context["target_height"] = kwargs['target_height']
 
+    print args, kwargs
     context["target_width"] = math.trunc(
         float(context["target_height"]) / context["track_height"] * context["track_width"] / 2) * 2
     return context
@@ -195,10 +188,10 @@ def transcode(*args, **kwargs):
     '''
     transcode the video to mp4 format
     '''
+    # print args, kwargs
     context = args[0]
     context["bitrate"] = kwargs['bitrate']
     context["segtime"] = kwargs['segtime']
-    context["name"] = kwargs['name']
     dimsp = str(context["target_width"]) + ":" + str(context["target_height"])
     if not os.path.exists(get_transcoded_folder(context)):
         try:
@@ -206,11 +199,11 @@ def transcode(*args, **kwargs):
         except OSError as e:
             pass
 
-    command_line = "ffmpeg -i " + context[
-        "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context[
-        "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
+    command_line = 
+        "ffmpeg -i " + context[
+            "original_file"] + " -c:v libx264 -profile:v main -level 3.1 -b:v " + str(context["bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
         context["segtime"]) + "\) " + get_transcoded_file(
-        context)
+            context)
     print("transcoding commandline %s" % command_line)
     subprocess.call(command_line,
                     shell=True)
@@ -263,7 +256,6 @@ def chunk_dash(*args, **kwargs):
     print args
     subprocess.call(args, shell=True)
     return context
-
 
 @app.task
 def edit_dash_playlist(*args, **kwards):
