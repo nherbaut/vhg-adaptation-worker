@@ -11,5 +11,4 @@ RUN pip install celery pymediainfo lxml pika
 VOLUME ["/worker"]
 COPY ./vhg_adaptation_worker-0.1-py2.7.egg /worker/
 RUN easy_install /worker/vhg_adaptation_worker-0.1-py2.7.egg
-
-RUN celery -A adaptation.commons worker --loglevel=info --concurrency=1
+CMD export C_FORCE_ROOT=true && celery -A adaptation.commons worker --loglevel=info --concurrency=1

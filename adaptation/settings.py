@@ -1,7 +1,8 @@
+import os
 config = {"folder_out": "/var/www/",
 	"folder_in":"/var/www_in",
           "bitrates_size_tuple_list": [(100, 100, "low"), (200, 200, "medium"), (500, 300, "high")],
-          "broker_host": "frontal",
+          "broker_host": os.environ["AMQP_PORT_5672_TCP_ADDR"],
           "broker_user": "guest",
           "broker_pwd": "guest"}
 
