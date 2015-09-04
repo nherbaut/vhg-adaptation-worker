@@ -14,6 +14,6 @@ RUN mkdir -p /worker/adaptation
 COPY adaptation/ /worker/adaptation
 RUN rm -rf /home/user/build
 RUN rm -rf /tmp/*
-#USER user
+USER user
 WORKDIR /worker
 CMD celery worker -A adaptation.commons

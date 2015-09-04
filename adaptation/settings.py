@@ -6,4 +6,4 @@ config = {"folder_out": "/var/www/out",
 #CELERY_RESULT_BACKEND = BROKER_URL
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
-# CELERY_ACCEPT_CONTENT = ['json']
+CELERY_ACCEPT_CONTENT = ['json']

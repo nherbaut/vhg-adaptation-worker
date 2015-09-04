@@ -7,14 +7,7 @@ import json
 import copy
 import pika
 from celery.utils.log import get_task_logger
-
-
-
-
-
-
-
-
+import time
 
 # config import
 from .settings import *
@@ -42,11 +35,14 @@ logger = get_task_logger(__name__)
 app.config_from_object('adaptation.settings')
 
 pika_con_params=pika.URLParameters(os.environ["CELERY_BROKER_URL"])
+
 pika_con_params.credentials.password="guest"
+#connection randomly failing in the cloud
+pika_con_params.socket_timeout=300
+
 connection = pika.BlockingConnection(pika_con_params)
 channel_pika = connection.channel()
 channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
-
 
 def run_background(*args):
     try:
@@ -107,14 +103,14 @@ def encode_workflow(self, url):
         context_loop["name"]=name
         context_loop = compute_target_size(context_loop, target_height=target_height)
         context_loop= transcode(context_loop, bitrate=bitrate, segtime=4, name=name)
-        context_loop= notify(context_loop, main_task_id=main_task_id, quality=name)
+        #context_loop= notify(context_loop, main_task_id=main_task_id, quality=name)
         context_loop= chunk_hls(context_loop, segtime=4)
         context_loop= add_playlist_info(context_loop)
 
     context = add_playlist_footer(context)
     context = chunk_dash(context, segtime=4, )
     context = edit_dash_playlist(context)
-    context = notify(context, complete=True, main_task_id=main_task_id)
+#    context = notify(context, complete=True, main_task_id=main_task_id)
 
 
 @app.task()
