@@ -1,7 +1,7 @@
 __author__ = 'nherbaut'
 import subprocess
 import math
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import shutil
 import json
 import copy
@@ -17,7 +17,7 @@ from celery.utils.log import get_task_logger
 
 
 # config import
-from settings import *
+from .settings import *
 
 # celery import
 from celery import Celery
@@ -29,7 +29,7 @@ from pymediainfo import MediaInfo
 from lxml import etree as LXML
 
 # context helpers
-from context import get_transcoded_folder, get_transcoded_file, get_hls_transcoded_playlist, get_hls_transcoded_folder, \
+from .context import get_transcoded_folder, get_transcoded_file, get_hls_transcoded_playlist, get_hls_transcoded_folder, \
     get_dash_folder, get_hls_folder, get_hls_global_playlist, get_dash_mpd_file_path
 
 # main app for celery, configuration is in separate settings.ini file
@@ -51,7 +51,7 @@ def run_background(*args):
     try:
         code = subprocess.check_call(*args, shell=True)
     except subprocess.CalledProcessError:
-        print "Error"
+        print("Error")
 
 
 @app.task(bind=True)
@@ -94,7 +94,7 @@ def ddo(url):
 @app.task(bind=True)
 def encode_workflow(self, url):
     main_task_id = self.request.id
-    print "(------------"
+    print("(------------")
 
     context = download_file(
         context={"url": url, "folder_out": os.path.join(config["folder_out"], main_task_id), "id": main_task_id,
@@ -118,15 +118,15 @@ def encode_workflow(self, url):
 
 @app.task()
 def download_file(*args, **kwargs):
-    print args, kwargs
+    print((args, kwargs))
     context = kwargs["context"]
     folder_in = context["folder_in"]
-    print("downloading %s", context["url"])
+    print(("downloading %s", context["url"]))
     context["original_file"] = os.path.join(folder_in, context["id"])
-    print("downloading in %s", context["original_file"] )
-    opener = urllib.URLopener()
+    print(("downloading in %s", context["original_file"] ))
+    opener = urllib.request.URLopener()
     opener.retrieve(context["url"], context["original_file"])
-    print("downloaded in %s", context["original_file"] )
+    print(("downloaded in %s", context["original_file"] ))
     return context
 
 
@@ -136,12 +136,12 @@ def get_video_size(*args, **kwargs):
     '''
     use mediainfo to compute the video size
     '''
-    print args, kwargs
+    print((args, kwargs))
     context = args[0]
     media_info = MediaInfo.parse(context["original_file"])
     for track in media_info.tracks:
         if track.track_type == 'Video':
-            print "video is %d, %d" % (track.height, track.width)
+            print(("video is %d, %d" % (track.height, track.width)))
             context["track_width"] = track.width
             context["track_height"] = track.height
             return context
@@ -162,7 +162,7 @@ def get_video_thumbnail(*args, **kwargs):
 
     ffargs = "ffmpeg -i " + context["original_file"] + " -vcodec mjpeg -vframes 1 -an -f rawvideo -s 426x240 -ss 10 " + \
              context["folder_out"] + "/folder.jpg"
-    print ffargs
+    print(ffargs)
     run_background(ffargs)
     return context
 
@@ -176,7 +176,7 @@ def compute_target_size(*args, **kwargs):
     context = args[0]
     context["target_height"] = kwargs['target_height']
 
-    print args, kwargs
+    print((args, kwargs))
     context["target_width"] = math.trunc(
         float(context["target_height"]) / context["track_height"] * context["track_width"] / 2) * 2
     return context
@@ -204,7 +204,7 @@ def transcode(*args, **kwargs):
         "bitrate"]) + "k -vf scale=" + dimsp + " -c:a aac -strict -2 -force_key_frames expr:gte\(t,n_forced*" + str(
         context["segtime"]) + "\) " + get_transcoded_file(
         context)
-    print("transcoding commandline %s" % command_line)
+    print(("transcoding commandline %s" % command_line))
     subprocess.call(command_line,
                     shell=True)
     return context
@@ -227,7 +227,7 @@ def chunk_hls(*args, **kwargs):
         context) + " -map 0 -flags +global_header -vcodec copy -vbsf h264_mp4toannexb -acodec copy -f segment -segment_format mpegts -segment_time " + str(
         context["segtime"]) + " -segment_wrap 0 -segment_list " + get_hls_transcoded_playlist(
         context) + " " + get_hls_transcoded_folder(context) + "/chunks_name%03d.ts"
-    print ffargs
+    print(ffargs)
     subprocess.call(ffargs, shell=True)
     return context
 
@@ -253,7 +253,7 @@ def chunk_dash(*args, **kwargs):
 
     args += files_in[0] + "#audio:id=a0 "
     args += " -out " + get_dash_mpd_file_path(context)
-    print args
+    print(args)
     subprocess.call(args, shell=True)
     return context
 
