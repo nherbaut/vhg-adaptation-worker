@@ -41,9 +41,8 @@ logger = get_task_logger(__name__)
 # inject settings into celery
 app.config_from_object('adaptation.settings')
 
-pika_con_params=pika.URLParameters(os.environ["CELERY_BROKER_URL"])
-pika_con_params.credentials.password="guest"
-connection = pika.BlockingConnection(pika_con_params)
+connection = pika.BlockingConnection(pika.ConnectionParameters(
+    config["broker_host"]))
 channel_pika = connection.channel()
 channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
 
@@ -119,7 +118,7 @@ def encode_workflow(self, url):
 
 @app.task()
 def download_file(*args, **kwargs):
-    print((args, kwargs))
+    print(args, kwargs)
     context = kwargs["context"]
     folder_in = context["folder_in"]
     print(("downloading %s", context["url"]))
@@ -137,12 +136,12 @@ def get_video_size(*args, **kwargs):
     '''
     use mediainfo to compute the video size
     '''
-    print((args, kwargs))
+    print(args, kwargs)
     context = args[0]
     media_info = MediaInfo.parse(context["original_file"])
     for track in media_info.tracks:
         if track.track_type == 'Video':
-            print(("video is %d, %d" % (track.height, track.width)))
+            print("video is %d, %d" % (track.height, track.width))
             context["track_width"] = track.width
             context["track_height"] = track.height
             return context
@@ -177,7 +176,7 @@ def compute_target_size(*args, **kwargs):
     context = args[0]
     context["target_height"] = kwargs['target_height']
 
-    print((args, kwargs))
+    print(args, kwargs)
     context["target_width"] = math.trunc(
         float(context["target_height"]) / context["track_height"] * context["track_width"] / 2) * 2
     return context
