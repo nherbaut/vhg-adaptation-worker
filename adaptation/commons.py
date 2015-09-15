@@ -1,13 +1,22 @@
+import urllib
+
 __author__ = 'nherbaut'
 import subprocess
 import math
-import urllib.request, urllib.parse, urllib.error
 import shutil
 import json
 import copy
+import mimetypes
+
 import pika
+import swiftclient
 from celery.utils.log import get_task_logger
-import time
+
+
+
+
+
+
 
 # config import
 from .settings import *
@@ -34,21 +43,67 @@ logger = get_task_logger(__name__)
 # inject settings into celery
 app.config_from_object('adaptation.settings')
 
-pika_con_params=pika.URLParameters(os.environ["CELERY_BROKER_URL"])
+pika_con_params = pika.URLParameters(os.environ["CELERY_BROKER_URL"])
 
-pika_con_params.credentials.password="guest"
-#connection randomly failing in the cloud
-pika_con_params.socket_timeout=300
+pika_con_params.credentials.password = "guest"
+# connection randomly failing in the cloud
+pika_con_params.socket_timeout = 300
 
 connection = pika.BlockingConnection(pika_con_params)
 channel_pika = connection.channel()
 channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
+
+logger.info("connecting to swift")
+
+try:
+    swift_authurl, swift_username, swift_password = (os.environ["ST_AUTH"], os.environ["ST_USER"], os.environ["ST_KEY"])
+    swift_connection = swiftclient.Connection(authurl=swift_authurl, user=swift_username, key=swift_password)
+    # verifying swift connectivity
+    swift_connection.head_account()
+
+except KeyError as key:
+    # no swift => no data will be sent to streamer
+    logger.warning("swift is NOT configured, nothing will be sent to streamer")
+    # swift_authurl,swift_username, swift_password = (None,None,None)
+    swift_connection = None
+except swiftclient.ClientException as ce:
+    logger.warning("swift credentials are did NOT pass, nothing will be sent to streamer")
+    # swift_authurl,swift_username, swift_password = (None,None,None)
+    swift_connection = None
+
 
 def run_background(*args):
     try:
         code = subprocess.check_call(*args, shell=True)
     except subprocess.CalledProcessError:
         print("Error")
+
+@app.task(bind=True)
+def publish_output(*args, **kwargs):
+    self = args[0]
+    context = args[1]
+    output_folder = context["folder_out"]
+    if swift_connection is None:
+        logger.warn("swift connection is not active, skipping streamer upload")
+
+    else:
+        headers = {}
+        container = os.path.basename(output_folder)
+        headers["X-Container-Read"] = " .r:*"
+        headers["X-Container-Meta-Access-Control-Allow-Origin"]="*"
+        headers["X-Container-Meta-Access-Control-Allow-Method"]="GET"
+
+        swift_connection.put_container(container, headers)
+        for object in os.walk(output_folder):
+            paths = object[2]
+            root = object[0]
+            for path in paths:
+                filepath = os.path.abspath(os.path.join(root, path))
+                with open(filepath) as f:
+                    content_type, encoding = mimetypes.guess_type(filepath)
+                    swift_connection.put_object(container, os.path.join(root, path)[len(output_folder)+1:], f, content_type=content_type)
+
+    return context
 
 
 @app.task(bind=True)
@@ -63,7 +118,8 @@ def notify(*args, **kwargs):
                                    body=json.dumps(kwargs))
     except:
         logger.error("failed to connect to pika, trying again one more time")
-        connection = pika.BlockingConnection(pika.ConnectionParameters(config["broker_host"]))
+        connection = pika.BlockingConnection(pika_con_params)
+
         channel_pika = connection.channel()
         channel_pika.queue_declare(queue='transcode-result', durable=True, exclusive=False, auto_delete=False)
         channel_pika.basic_publish(exchange='',
@@ -99,18 +155,19 @@ def encode_workflow(self, url):
     context = get_video_size(context)
     context = add_playlist_header(context)
     for target_height, bitrate, name in config["bitrates_size_tuple_list"]:
-        context_loop=copy.deepcopy(context)
-        context_loop["name"]=name
+        context_loop = copy.deepcopy(context)
+        context_loop["name"] = name
         context_loop = compute_target_size(context_loop, target_height=target_height)
-        context_loop= transcode(context_loop, bitrate=bitrate, segtime=4, name=name)
-        #context_loop= notify(context_loop, main_task_id=main_task_id, quality=name)
-        context_loop= chunk_hls(context_loop, segtime=4)
-        context_loop= add_playlist_info(context_loop)
+        context_loop = transcode(context_loop, bitrate=bitrate, segtime=4, name=name)
+        context_loop = notify(context_loop, main_task_id=main_task_id, quality=name)
+        context_loop = chunk_hls(context_loop, segtime=4)
+        context_loop = add_playlist_info(context_loop)
 
     context = add_playlist_footer(context)
     context = chunk_dash(context, segtime=4, )
     context = edit_dash_playlist(context)
-#    context = notify(context, complete=True, main_task_id=main_task_id)
+    context = publish_output(context)
+    context = notify(context, complete=True, main_task_id=main_task_id)
 
 
 @app.task()
@@ -121,7 +178,7 @@ def download_file(*args, **kwargs):
     print(("downloading %s", context["url"]))
     context["original_file"] = os.path.join(folder_in, context["id"])
     print(("downloading in %s", context["original_file"] ))
-    opener = urllib.request.URLopener()
+    opener = urllib.URLopener()
     opener.retrieve(context["url"], context["original_file"])
     print(("downloaded in %s", context["original_file"] ))
     return context
